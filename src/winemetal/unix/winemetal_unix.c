@@ -1509,6 +1509,22 @@ _MetalLayer_setProps(void *obj) {
     layer.displaySyncEnabled = props->display_sync_enabled;
     layer.drawableSize = CGSizeMake(props->drawable_width, props->drawable_height);
     layer.pixelFormat = to_metal_pixel_format(props->pixel_format);
+    /* Fix: sync Metal view and its superview (Wine content view) to window size.
+       Wine's MoveWindow resizes the NSWindow but the content view doesn't follow. */
+    NSView *metalView = (NSView *)[layer delegate];
+    if (metalView) {
+      NSView *contentView = [metalView superview];
+      NSWindow *window = [metalView window];
+      if (contentView && window) {
+        NSRect windowContent = [window contentLayoutRect];
+        if (!NSEqualSizes(contentView.frame.size, windowContent.size)) {
+          [contentView setFrameSize:windowContent.size];
+        }
+        if (!NSEqualSizes(metalView.frame.size, windowContent.size)) {
+          [metalView setFrame:contentView.bounds];
+        }
+      }
+    }
   });
   return STATUS_SUCCESS;
 }
