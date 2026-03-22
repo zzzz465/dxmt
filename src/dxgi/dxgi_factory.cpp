@@ -131,8 +131,14 @@ public:
       fsDesc.Windowed = TRUE;
     }
 
-    return metal_dxgi_device->CreateSwapChain(this, hWnd, &desc, &fsDesc,
+    HRESULT hr = metal_dxgi_device->CreateSwapChain(this, hWnd, &desc, &fsDesc,
                                               ppSwapChain);
+    if (FAILED(hr)) {
+      WARN("CreateSwapChainForHwnd: FAILED hr=0x", std::hex, (unsigned)hr,
+           " ", std::dec, desc.Width, "x", desc.Height,
+           " fmt=", desc.Format, " flags=0x", std::hex, desc.Flags);
+    }
+    return hr;
   }
 
   HRESULT STDMETHODCALLTYPE CreateSwapChainForCoreWindow(

@@ -477,7 +477,10 @@ public:
 
   HRESULT STDMETHODCALLTYPE
   OpenSharedResource(HANDLE hResource, REFIID ReturnedInterface, void **ppResource) override {
-    return ImportSharedTexture(this, hResource, ReturnedInterface, ppResource);
+    WARN("OpenSharedResource: handle=", hResource, " iid=", str::format(ReturnedInterface));
+    HRESULT hr = ImportSharedTexture(this, hResource, ReturnedInterface, ppResource);
+    WARN("OpenSharedResource: result=0x", std::hex, (unsigned)hr);
+    return hr;
   }
 
   HRESULT STDMETHODCALLTYPE
@@ -792,7 +795,10 @@ public:
 
   HRESULT STDMETHODCALLTYPE
   OpenSharedResource1(HANDLE hResource, REFIID ReturnedInterface, void **ppResource) override {
-    return ImportSharedTextureFromNtHandle(this, hResource, ReturnedInterface, ppResource);
+    WARN("OpenSharedResource1: handle=", hResource, " iid=", str::format(ReturnedInterface));
+    HRESULT hr = ImportSharedTextureFromNtHandle(this, hResource, ReturnedInterface, ppResource);
+    WARN("OpenSharedResource1: result=0x", std::hex, (unsigned)hr);
+    return hr;
   }
 
   HRESULT STDMETHODCALLTYPE
@@ -861,26 +867,41 @@ public:
     if ((pDesc->MiscFlags & D3D11_RESOURCE_MISC_TILED))
       return E_INVALIDARG; // not supported yet
 
+    HRESULT result = S_OK;
     try {
       switch (pDesc->Usage) {
       case D3D11_USAGE_DEFAULT:
       case D3D11_USAGE_IMMUTABLE:
-        return CreateDeviceTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        result = CreateDeviceTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        break;
       case D3D11_USAGE_DYNAMIC: {
-        HRESULT hr = CreateDynamicLinearTexture2D(this, pDesc, pInitialData, ppTexture2D);
-        if (SUCCEEDED(hr))
-          return hr;
-        return CreateDynamicTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        result = CreateDynamicLinearTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        if (SUCCEEDED(result))
+          break;
+        result = CreateDynamicTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        break;
       }
       case D3D11_USAGE_STAGING:
         if (pDesc->BindFlags != 0) {
-          return E_INVALIDARG;
+          result = E_INVALIDARG;
+          break;
         }
-        return CreateStagingTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        result = CreateStagingTexture2D(this, pDesc, pInitialData, ppTexture2D);
+        break;
       }
-      return S_OK;
+      if (FAILED(result)) {
+        WARN("CreateTexture2D1: FAILED hr=0x", std::hex, (unsigned)result,
+             " ", std::dec, pDesc->Width, "x", pDesc->Height,
+             " fmt=", pDesc->Format, " usage=", pDesc->Usage,
+             " bind=0x", std::hex, pDesc->BindFlags,
+             " misc=0x", pDesc->MiscFlags,
+             " sample=", std::dec, pDesc->SampleDesc.Count);
+      }
+      return result;
     } catch (const MTLD3DError &err) {
-      ERR(err.message());
+      ERR("CreateTexture2D1: exception: ", err.message(),
+          " ", pDesc->Width, "x", pDesc->Height,
+          " fmt=", pDesc->Format, " bind=0x", std::hex, pDesc->BindFlags);
       return E_FAIL;
     }
   }
@@ -935,7 +956,15 @@ public:
     if (!ppSRView)
       return S_FALSE;
 
-    return static_cast<D3D11ResourceCommon *>(pResource)->CreateShaderResourceView(pDesc, ppSRView);
+    HRESULT hr = static_cast<D3D11ResourceCommon *>(pResource)->CreateShaderResourceView(pDesc, ppSRView);
+    if (FAILED(hr)) {
+      D3D11_RESOURCE_DIMENSION dim;
+      pResource->GetType(&dim);
+      WARN("CreateShaderResourceView1: FAILED hr=0x", std::hex, (unsigned)hr,
+           " dim=", std::dec, (unsigned)dim,
+           " fmt=", pDesc ? (unsigned)pDesc->Format : 0u);
+    }
+    return hr;
   }
 
   HRESULT STDMETHODCALLTYPE CreateUnorderedAccessView1(
@@ -963,7 +992,12 @@ public:
     if (!ppRTView)
       return S_FALSE;
 
-    return static_cast<D3D11ResourceCommon *>(pResource)->CreateRenderTargetView(pDesc, ppRTView);
+    HRESULT hr = static_cast<D3D11ResourceCommon *>(pResource)->CreateRenderTargetView(pDesc, ppRTView);
+    if (FAILED(hr)) {
+      WARN("CreateRenderTargetView1: FAILED hr=0x", std::hex, (unsigned)hr,
+           " fmt=", std::dec, pDesc ? (unsigned)pDesc->Format : 0u);
+    }
+    return hr;
   }
 
   HRESULT STDMETHODCALLTYPE CreateQuery1(const D3D11_QUERY_DESC1 *desc,

@@ -217,6 +217,11 @@ public:
       return S_OK;
     }
 
+    if (riid == __uuidof(IDXGIKeyedMutex)) {
+      WARN("D3D11Resource(", tag::debug_name, "): QI for IDXGIKeyedMutex (NOT IMPLEMENTED)");
+      return E_NOINTERFACE;
+    }
+
     if (logQueryInterfaceError(__uuidof(typename tag::COM), riid)) {
       WARN("D3D11Resource(", tag::debug_name ,"): Unknown interface query ", str::format(riid));
     }

@@ -141,6 +141,19 @@ public:
 
     if (unlikely(!pResource || !pMappedResource))
       return E_INVALIDARG;
+
+    D3D11_RESOURCE_DIMENSION _map_dim;
+    pResource->GetType(&_map_dim);
+    bool _map_is_overlay_tex = false;
+    if (_map_dim == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+      D3D11_TEXTURE2D_DESC _td;
+      static_cast<ID3D11Texture2D*>(pResource)->GetDesc(&_td);
+      _map_is_overlay_tex = (_td.Format == 28 && _td.Usage == D3D11_USAGE_STAGING);
+      if (_map_is_overlay_tex) {
+        WARN("Map: tex2d ", _td.Width, "x", _td.Height,
+             " fmt=", _td.Format, " usage=", _td.Usage, " map=", (unsigned)MapType);
+      }
+    }
     UINT buffer_length = 0, &row_pitch = buffer_length;
     UINT bind_flag = 0, &depth_pitch = bind_flag;
     auto current_seq_id = cmd_queue.CurrentSeqId();
@@ -278,6 +291,9 @@ public:
         coherent_seq_id = cmd_queue.CoherentSeqId();
       };
     };
+    if (_map_is_overlay_tex) {
+      WARN("Map: overlay tex FALLTHROUGH — no handler matched (staging result?)");
+    }
     if (pMappedResource == nullptr) {
       UNIMPLEMENTED("unimplemented USAGE_DEFAULT resource mapping");
     }
@@ -294,6 +310,25 @@ public:
     UINT row_pitch = 0;
     UINT depth_pitch = 0;
     if (auto staging = GetStagingResource(pResource, Subresource)) {
+      // Check staging content before unmap (for overlay texture debugging)
+      D3D11_RESOURCE_DIMENSION dim;
+      pResource->GetType(&dim);
+      if (dim == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+        D3D11_TEXTURE2D_DESC td;
+        static_cast<ID3D11Texture2D*>(pResource)->GetDesc(&td);
+        if (td.Format == 28 && td.Width > 100) { // R8G8B8A8 overlay textures only
+          auto* data = static_cast<uint32_t*>(staging->mappedImmediateMemory());
+          uint32_t nonzero = 0;
+          uint32_t total = std::min<uint32_t>(td.Width * td.Height, 1024);
+          for (uint32_t i = 0; i < total; i++) {
+            if (data[i] != 0) nonzero++;
+          }
+          WARN("Unmap: staging tex2d ", td.Width, "x", td.Height, " fmt=28"
+               " first1024: nonzero=", nonzero, "/", total,
+               " px[0]=0x", std::hex, data[0], " px[1]=0x", data[1],
+               " px[512]=0x", data[512]);
+        }
+      }
       staging->unmap();
     };
     if (auto dynamic = GetDynamicTexture(pResource, Subresource, &row_pitch, &depth_pitch)) {

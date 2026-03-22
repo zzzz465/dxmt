@@ -1017,6 +1017,20 @@ public:
   CopyResource(ID3D11Resource *pDstResource, ID3D11Resource *pSrcResource) override {
     std::lock_guard<mutex_t> lock(mutex);
 
+    {
+      D3D11_RESOURCE_DIMENSION srcDim, dstDim;
+      pSrcResource->GetType(&srcDim);
+      pDstResource->GetType(&dstDim);
+      if (srcDim == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+        D3D11_TEXTURE2D_DESC sd;
+        static_cast<ID3D11Texture2D*>(pSrcResource)->GetDesc(&sd);
+        D3D11_TEXTURE2D_DESC dd;
+        static_cast<ID3D11Texture2D*>(pDstResource)->GetDesc(&dd);
+        WARN("CopyResource: tex2d src ", sd.Width, "x", sd.Height, " fmt=", sd.Format,
+             " usage=", sd.Usage, " → dst usage=", dd.Usage, " misc=0x", std::hex, dd.MiscFlags);
+      }
+    }
+
     BlitObject Dst(device, pDstResource);
     BlitObject Src(device, pSrcResource);
 
@@ -1077,6 +1091,21 @@ public:
       return;
     if (!pSrcResource)
       return;
+
+    {
+      D3D11_RESOURCE_DIMENSION sd, dd;
+      pSrcResource->GetType(&sd);
+      pDstResource->GetType(&dd);
+      if (sd == D3D11_RESOURCE_DIMENSION_TEXTURE2D && dd == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+        D3D11_TEXTURE2D_DESC s, d;
+        static_cast<ID3D11Texture2D*>(pSrcResource)->GetDesc(&s);
+        static_cast<ID3D11Texture2D*>(pDstResource)->GetDesc(&d);
+        if (s.Format == 28 || d.Format == 28) {
+          WARN("CopySubresource: tex2d src ", s.Width, "x", s.Height, " fmt=", s.Format,
+               " u=", s.Usage, " → dst ", d.Width, "x", d.Height, " u=", d.Usage);
+        }
+      }
+    }
 
     BlitObject Dst(device, pDstResource);
     BlitObject Src(device, pSrcResource);

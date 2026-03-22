@@ -399,6 +399,12 @@ HRESULT CreateDeviceTextureInternal(MTLD3D11Device *pDevice,
   auto shared_flag =
       D3D11_RESOURCE_MISC_SHARED | D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
   if (finalDesc.MiscFlags & shared_flag) {
+    WARN("CreateDeviceTexture: shared texture, MiscFlags=0x", std::hex, finalDesc.MiscFlags,
+         " BindFlags=0x", finalDesc.BindFlags,
+         " KEYED=", !!(finalDesc.MiscFlags & D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX),
+         " ", std::dec, finalDesc.Width, "x",
+         [&]() -> unsigned { if constexpr (std::is_same_v<tag, tag_texture_2d>) return finalDesc.Height; else return 0u; }(),
+         " fmt=", finalDesc.Format);
     if (!(pDevice->GetLocalD3DKMT() & 0xc0000000)) {
       ERR("DeviceTexture: Invalid device handle");
       return E_FAIL;
